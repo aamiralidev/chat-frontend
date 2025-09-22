@@ -8,14 +8,14 @@ export default function MessageBubble({ message }) {
         : "bg-gray-200 text-gray-800 self-start"
         }`}
     >
-      <p className="break-words">{message.message}</p>
+      <p className="break-words">{message.content}</p>
 
       {/* Timestamp */}
       <span
         className={`text-[10px] mt-1 self-end ${isOutgoing ? "text-blue-100" : "text-gray-500"
           }`}
       >
-        {message.time}
+        {message.timestamp}
       </span>
     </div>
   );

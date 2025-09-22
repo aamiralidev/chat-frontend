@@ -1,18 +1,25 @@
 import { useRef, useEffect, useState } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import MessageBubble from "./MessageBubble";
-import { messages } from "../../mock/messages";
+// import { messages } from "../../mock/messages";
+import { loadMessagesFromDB } from '../../state/messagesSlice';
+
 
 export default function MessagesList() {
   const containerRef = useRef(null);
   const selectedChatId = useSelector((state) => state.chat.selectedChatId);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const messages = useSelector(state => state.messages.entities[selectedChatId] || []);
+  const dispatch = useDispatch()
 
-  const filteredMessages = messages.filter(
-    (msg) => msg.chatId === selectedChatId
-  );
+  const filteredMessages = messages;
 
   useEffect(() => {
+    dispatch(loadMessagesFromDB(selectedChatId));
+  }, [selectedChatId, dispatch]);
+
+  useEffect(() => {
+    console.log(filteredMessages)
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
@@ -51,7 +58,7 @@ export default function MessagesList() {
             <div>No messages yet in this chat</div>
           </div>
         ) : (
-          filteredMessages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+          filteredMessages.map((msg) => <MessageBubble key={msg.local_id} message={msg} />)
         )}
       </div>
 
