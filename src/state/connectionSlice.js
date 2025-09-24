@@ -12,13 +12,16 @@ const connectionSlice = createSlice({
     setOnlineStatus: (state, action) => {
       state.isOnline = action.payload;
     },
+    setNetworkStatus: (state, action) => {
+      state.isOnline = action.payload;
+    },
     setWsConnected: (state, action) => {
       state.wsConnected = action.payload;
     }
   }
 });
 
-export const { setOnlineStatus, setWsConnected } = connectionSlice.actions;
+export const { setOnlineStatus, setWsConnected, setNetworkStatus } = connectionSlice.actions;
 
 // Thunks for controlling WebSocket
 export const initWebSocket = (url) => ({
@@ -29,5 +32,6 @@ export const initWebSocket = (url) => ({
 export const closeWebSocket = () => ({
   type: 'connection/closeWebSocket'
 });
+
 
 export default connectionSlice.reducer;

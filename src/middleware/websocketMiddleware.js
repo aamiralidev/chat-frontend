@@ -1,25 +1,30 @@
 import { setWsConnected } from '../state/connectionSlice';
 import { updateMessageStatus, addMessage } from '../state/messagesSlice';
-import { db } from '../data/db';
+import { saveMessage as addMessageToDB, updateMessageStatus as updateMessageStatusInDB } from '../data/messagesDB';
+import { receiveConversation } from '@/state/conversationsSlice';
 
 // Action type constants
 const WS_CONNECT = 'connection/initWebSocket';
 const WS_DISCONNECT = 'connection/closeWebSocket';
 const SEND_MESSAGE = 'messages/sendMessage';
+const RESEND_PENDING = 'messages/resendPending'
+const CREATE_CHAT = 'chats/createConversation'
+
+let reconnectAttempts = 0;
+let reconnectTimer = null;
 
 export const websocketMiddleware = store => {
   let socket = null;
-  let reconnectTimer = null;
 
   const connect = (url) => {
+    if (socket && socket.readyState === WebSocket.OPEN) return;
+
     socket = new WebSocket(url);
 
-    socket.onopen = () => {
+    socket.onopen = async () => {
       console.log('[WS] Connected');
+      reconnectAttempts = 0;
       store.dispatch(setWsConnected(true));
-
-      // Flush pending messages once connected
-      flushPendingMessages(store);
     };
 
     socket.onclose = () => {
@@ -36,48 +41,55 @@ export const websocketMiddleware = store => {
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
 
-      // Handle incoming message
-      if (data.type === 'message') {
-        // 1. Save to IndexedDB
-        await db.messages.add(data);
+      switch (data.type) {
+        case 'MESSAGE_RECEIVED':
+          // 1. Save to IndexedDB
+          await addMessageToDB(data.message);
 
-        // 2. Update Redux
-        store.dispatch(addMessage({ chatId: data.chat_id, message: data }));
-      }
+          // 2. Update Redux
+          store.dispatch(addMessage({ chatId: data.message.chat_id, message: data.message }));
+          break;
 
-      // Handle ACK from server
-      if (data.type === 'ack') {
-        store.dispatch(updateMessageStatus({
-          chatId: data.chat_id,
-          localId: data.local_id,
-          status: 'sent',
-          serverId: data.server_id
-        }));
+        case 'MESSAGE_ACK':
+          // Update Redux state
+          store.dispatch(updateMessageStatus({
+            chatId: data.chat_id,
+            localId: data.local_id,
+            status: 'sent',
+            serverId: data.server_id
+          }));
 
-        // Update IndexedDB
-        await db.messages
-          .where('local_id')
-          .equals(data.local_id)
-          .modify({ status: 'sent', server_id: data.server_id });
+          // Update IndexedDB
+          await updateMessageStatusInDB(data.local_id, { status: 'sent', server_id: data.server_id })
+          break;
+
+        case 'CREATE_CHAT':
+          store.dispatch(receiveConversation(data))
+          break;
+
+        default:
+          console.warn('[WS] Unknown message type:', data.type);
       }
     };
   };
 
   const retryConnection = (url) => {
     if (reconnectTimer) return;
+
+    reconnectAttempts++;
+    const delay = Math.min(5000, 1000 * reconnectAttempts); // max 5 sec
+
     reconnectTimer = setTimeout(() => {
-      console.log('[WS] Retrying connection...');
+      console.log(`[WS] Retrying connection... Attempt ${reconnectAttempts}`);
       connect(url);
       reconnectTimer = null;
-    }, 3000);
+    }, delay);
   };
 
   return next => action => {
     switch (action.type) {
       case WS_CONNECT:
-        if (!socket || socket.readyState === WebSocket.CLOSED) {
-          connect(action.payload); // payload = WebSocket URL
-        }
+        connect(action.payload); // payload = WebSocket URL
         break;
 
       case WS_DISCONNECT:
@@ -88,7 +100,21 @@ export const websocketMiddleware = store => {
 
       case SEND_MESSAGE:
         if (socket && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify(action.payload));
+          socket.send(JSON.stringify({ type: 'SEND_MESSAGE', payload: action.payload }));
+        } else {
+          console.log('[WS] Not connected. Message will be sent later.');
+        }
+        break;
+      case RESEND_PENDING:
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'SEND_MESSAGE', payload: action.payload }));
+        } else {
+          console.log('[WS] Not connected. Message will be sent later.');
+        }
+        break;
+      case CREATE_CHAT:
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: CREATE_CHAT, payload: action.payload }));
         } else {
           console.log('[WS] Not connected. Message will be sent later.');
         }
@@ -101,19 +127,3 @@ export const websocketMiddleware = store => {
     return next(action);
   };
 };
-
-// Flush all messages with status=pending
-async function flushPendingMessages(store) {
-  const pending = await db.messages.where('status').equals('pending').toArray();
-
-  if (pending.length > 0) {
-    console.log(`[WS] Flushing ${pending.length} pending messages`);
-  }
-
-  for (const message of pending) {
-    store.dispatch({
-      type: 'messages/sendMessage',
-      payload: message
-    });
-  }
-}

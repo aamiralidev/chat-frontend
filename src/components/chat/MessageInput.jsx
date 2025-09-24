@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Send, Paperclip, Smile } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
-import { saveMessageToDB, addMessage } from "../../state/messagesSlice";
+import { sendMessage } from "../../state/messagesSlice";
 
 export default function MessageInput() {
   const dispatch = useDispatch();
@@ -25,10 +25,7 @@ export default function MessageInput() {
     };
 
     // 1. Update Redux immediately for instant UI feedback
-    dispatch(addMessage({ chatId, message }));
-
-    // 2. Persist message to IndexedDB
-    dispatch(saveMessageToDB(message));
+    dispatch(sendMessage({ chatId, message }));
 
     // 3. Clear the input
     setText("");

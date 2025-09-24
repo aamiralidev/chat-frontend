@@ -9,7 +9,7 @@ export default function MessagesList() {
   const containerRef = useRef(null);
   const selectedChatId = useSelector((state) => state.chat.selectedChatId);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const messages = useSelector(state => state.messages.entities[selectedChatId] || []);
+  const messages = useSelector(state => state.messages.byChatId[selectedChatId] || []);
   const dispatch = useDispatch()
 
   const filteredMessages = messages;

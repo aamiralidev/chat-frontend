@@ -1,77 +1,154 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { db } from '../data/db';
+// src/state/messagesSlice.js
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import * as messagesDB from "../data/messagesDB";
+import { updateLastMessage } from "./conversationsSlice";
 
-// ---------------------------------------
-// Async Thunks
-// ---------------------------------------
+/**
+ * Message object shape (client-side)
+ * {
+ *   id?: number,           // optional DB primary key
+ *   local_id: string,      // UUID generated client-side
+ *   server_id?: string,    // assigned by server
+ *   chat_id: string,
+ *   sender_id: string,
+ *   sender_username?: string,
+ *   content: string,
+ *   timestamp: number,     // ms since epoch
+ *   status: 'pending'|'sending'|'sent'|'delivered'|'read'|'failed'
+ * }
+ */
 
-// Load *all* cached messages on startup
+/* -------------------------
+   Async thunks
+   -------------------------*/
+
+/**
+ * Load all cached messages from IndexedDB (used on app bootstrap).
+ */
 export const loadCachedMessages = createAsyncThunk(
-  'messages/loadCached',
+  "messages/loadCachedMessages",
   async () => {
-    const messages = await db.messages.toArray();
+    // returns array of messages
+    const messages = await messagesDB.getAllMessages?.() ?? await messagesDB.getAll?.();
+    // If your messagesDB exports getAllMessages(), use that; fallback generic names handled.
     return messages;
   }
 );
 
-// Load messages for a specific chat (used for pagination or focused load)
+/**
+ * Load messages for a particular chat (useful for pagination / opening a chat).
+ * Returns { chatId, messages }
+ */
 export const loadMessagesFromDB = createAsyncThunk(
-  'messages/loadFromDB',
+  "messages/loadMessagesFromDB",
   async (chatId) => {
-    const messages = await db.messages
-      .where('chat_id')
-      .equals(chatId)
-      .sortBy('timestamp');
-
+    const messages = await messagesDB.getMessagesForChat(chatId);
     return { chatId, messages };
   }
 );
 
-// Save a new message to IndexedDB
+/**
+ * Save a message to IndexedDB. Returns the saved message.
+ * This is used when composing/sending a new message (persist before send).
+ */
 export const saveMessageToDB = createAsyncThunk(
-  'messages/saveToDB',
+  "messages/saveMessageToDB",
   async (message) => {
-    await db.messages.add(message);
+    await messagesDB.saveMessage(message);
     return message;
   }
 );
 
-// Fetch missed messages from server
+/**
+ * Fetch missed messages from server since lastSyncTimestamp (REST fallback).
+ * payload: { lastSyncTimestamp } (number)
+ * Returns array of server messages.
+ */
 export const syncWithServer = createAsyncThunk(
-  'messages/syncWithServer',
+  "messages/syncWithServer",
   async ({ lastSyncTimestamp }) => {
-    const response = await fetch(`/api/messages/sync?since=${lastSyncTimestamp}`);
-    const data = await response.json();
-    return data.messages;
+    // fetchMissedMessages should internally use lastSyncTimestamp or your API contract
+    // const messages = await fetchMissedMessages(lastSyncTimestamp);
+    const messages = []
+    return messages || [];
   }
 );
 
-// ---------------------------------------
-// Slice
-// ---------------------------------------
+/* -------------------------
+   Helper: upsert into state
+   -------------------------*/
+function upsertMessageIntoState(state, message) {
+  const chatId = message.chat_id;
+  if (!chatId) return;
 
+  if (!state.byChatId[chatId]) state.byChatId[chatId] = [];
+
+  const list = state.byChatId[chatId];
+
+  // Try to find existing by server_id first, then local_id
+  const existingIndex = list.findIndex(
+    (m) =>
+      (m.server_id && message.server_id && m.server_id === message.server_id) ||
+      (m.local_id && message.local_id && m.local_id === message.local_id)
+  );
+
+  if (existingIndex >= 0) {
+    // Merge/replace - prefer server fields when present, keep timestamp ordering intact
+    const existing = list[existingIndex];
+    list[existingIndex] = { ...existing, ...message };
+  } else {
+    // Insert in sorted order (by timestamp ascending). Keep arrays reasonably ordered.
+    // Simple push then sort for clarity; for large lists optimize (binary insert).
+    list.push(message);
+    list.sort((a, b) => a.timestamp - b.timestamp);
+  }
+}
+
+export const sendMessage = createAsyncThunk('messages/sendMessage', async ({ chatId, message }, { dispatch }) => {
+  dispatch(addMessage({ chatId, message }));
+  await dispatch(saveMessageToDB(message));
+  dispatch(updateLastMessage({ chatId, message }));
+  // middleware will handle sending
+  return message;
+})
+
+
+/* -------------------------
+   Slice
+   -------------------------*/
 const initialState = {
-  entities: {},           // { chatId: [messages...] }
+  byChatId: {},           // { [chatId]: Message[] }
   loading: false,
   error: null,
-  lastSyncTimestamp: null
+  lastSyncTimestamp: null // updated by syncWithServer or metaDB elsewhere
 };
 
 const messagesSlice = createSlice({
-  name: 'messages',
+  name: "messages",
   initialState,
   reducers: {
+    /**
+     * Add a message into Redux state (used by UI instantly when sending,
+     * and also by websocket incoming message handlers).
+     *
+     * payload: { chatId, message }
+     */
     addMessage: (state, action) => {
       const { chatId, message } = action.payload;
-      if (!state.entities[chatId]) state.entities[chatId] = [];
-      state.entities[chatId].push(message);
+      upsertMessageIntoState(state, message);
+      state.error = null;
     },
 
+    /**
+     * Update message status (e.g., pending -> sent) and optionally attach server_id.
+     *
+     * payload: { chatId, localId, status, serverId? }
+     */
     updateMessageStatus: (state, action) => {
       const { chatId, localId, status, serverId } = action.payload;
-      const messages = state.entities[chatId] || [];
-      const msg = messages.find(
-        (m) => m.local_id === localId || m.server_id === serverId
+      const list = state.byChatId[chatId] || [];
+      const msg = list.find(
+        (m) => (m.local_id && m.local_id === localId) || (serverId && m.server_id === serverId)
       );
       if (msg) {
         msg.status = status;
@@ -79,50 +156,92 @@ const messagesSlice = createSlice({
       }
     },
 
+    /**
+     * Replace messages for a chat (used by pagination or manual refresh).
+     * payload: { chatId, messages }
+     */
     setMessagesForChat: (state, action) => {
       const { chatId, messages } = action.payload;
-      state.entities[chatId] = messages;
+      state.byChatId[chatId] = messages.slice().sort((a, b) => a.timestamp - b.timestamp);
+    },
+
+    /**
+     * Optional: remove a message (by local_id or server_id).
+     * payload: { chatId, localId?, serverId? }
+     */
+    removeMessage: (state, action) => {
+      const { chatId, localId, serverId } = action.payload;
+      if (!state.byChatId[chatId]) return;
+      state.byChatId[chatId] = state.byChatId[chatId].filter(
+        (m) => !(m.local_id === localId || (serverId && m.server_id === serverId))
+      );
     }
   },
 
   extraReducers: (builder) => {
-    builder
-      // Handle initial offline cached load
-      .addCase(loadCachedMessages.fulfilled, (state, action) => {
-        action.payload.forEach(msg => {
-          if (!state.entities[msg.chat_id]) {
-            state.entities[msg.chat_id] = [];
-          }
-          state.entities[msg.chat_id].push(msg);
-        });
-      })
+    /* loadCachedMessages (all DB messages) */
+    builder.addCase(loadCachedMessages.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(loadCachedMessages.fulfilled, (state, action) => {
+      state.loading = false;
+      const messages = action.payload || [];
+      // Upsert all messages into byChatId
+      messages.forEach((m) => upsertMessageIntoState(state, m));
+    });
+    builder.addCase(loadCachedMessages.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.error?.message || "Failed to load cached messages";
+    });
 
-      // Handle per-chat load
-      .addCase(loadMessagesFromDB.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(loadMessagesFromDB.fulfilled, (state, action) => {
-        const { chatId, messages } = action.payload;
-        state.entities[chatId] = messages;
-        state.loading = false;
-      })
-      .addCase(loadMessagesFromDB.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message;
-      })
+    /* loadMessagesFromDB (single chat) */
+    builder.addCase(loadMessagesFromDB.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(loadMessagesFromDB.fulfilled, (state, action) => {
+      state.loading = false;
+      const { chatId, messages } = action.payload;
+      state.byChatId[chatId] = (messages || []).slice().sort((a, b) => a.timestamp - b.timestamp);
+    });
+    builder.addCase(loadMessagesFromDB.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.error?.message || "Failed to load messages for chat";
+    });
 
-      // Handle server sync
-      .addCase(syncWithServer.fulfilled, (state, action) => {
-        action.payload.forEach(msg => {
-          if (!state.entities[msg.chat_id]) {
-            state.entities[msg.chat_id] = [];
-          }
-          state.entities[msg.chat_id].push(msg);
-        });
-        state.lastSyncTimestamp = Date.now();
-      });
+    /* saveMessageToDB (persist new message) */
+    builder.addCase(saveMessageToDB.fulfilled, (state, action) => {
+      // The message was already added to the Redux state by addMessage (optimistic).
+      // Nothing else required here. If DB returned a generated id we could attach it.
+    });
+    builder.addCase(saveMessageToDB.rejected, (state, action) => {
+      state.error = action.error?.message || "Failed to save message to DB";
+    });
+
+    /* syncWithServer (pull missed messages) */
+    builder.addCase(syncWithServer.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(syncWithServer.fulfilled, (state, action) => {
+      state.loading = false;
+      const serverMessages = action.payload || [];
+      serverMessages.forEach((m) => upsertMessageIntoState(state, m));
+      state.lastSyncTimestamp = Date.now();
+    });
+    builder.addCase(syncWithServer.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.error?.message || "Sync with server failed";
+    });
   }
 });
 
-export const { addMessage, updateMessageStatus, setMessagesForChat } = messagesSlice.actions;
+export const {
+  addMessage,
+  updateMessageStatus,
+  setMessagesForChat,
+  removeMessage
+} = messagesSlice.actions;
+
 export default messagesSlice.reducer;

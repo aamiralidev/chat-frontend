@@ -2,6 +2,7 @@
 import { store } from '../store';
 import { updateMessageStatus, addMessage } from '../features/messages/messagesSlice';
 import { db } from '../data/db';
+import { setWsConnected } from '@/state/connectionSlice';
 
 let socket = null;
 let reconnectAttempts = 0;
@@ -18,6 +19,7 @@ export const initWebSocket = () => {
   socket.onopen = async () => {
     console.log('[WebSocket] Connected');
     reconnectAttempts = 0;
+    store.dispatch(setWsConnected(true))
 
     // Flush queued messages
     await flushPendingMessages();
@@ -55,12 +57,14 @@ export const initWebSocket = () => {
 
   socket.onclose = () => {
     console.log('[WebSocket] Disconnected, retrying...');
+    store.dispatch(setWsConnected(false))
     attemptReconnect();
   };
 
   socket.onerror = (err) => {
     console.error('[WebSocket] Error:', err);
     socket.close(); // will trigger onclose
+    store.dispatch(setWsConnected(false))
   };
 };
 

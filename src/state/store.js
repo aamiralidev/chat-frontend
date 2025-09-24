@@ -1,7 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 import sidebarReducer from "./sidebarSlice";
 import messagesReducer from "./messagesSlice";
-import chatReducer from "./chatSlice"
+import chatReducer from "./conversationsSlice"
 import themeReducer from "./themeSlice";
 import conversationsReducer from './conversationsSlice';
 import connectionReducer from './connectionSlice';
