@@ -2,18 +2,19 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  selectedChatId: null,
+  Current: {},
 };
 
 const conversationSlice = createSlice({
-  name: "conversation",
+  name: "selectedChat",
   initialState,
   reducers: {
     setSelectedChat: (state, action) => {
-      state.selectedChatId = action.payload;
+      console.log("Updating chatid: ", action.payload)
+      state.Current = action.payload;
     },
     clearSelectedChat: (state) => {
-      state.selectedChatId = null;
+      state.Current = {};
     },
   },
 });

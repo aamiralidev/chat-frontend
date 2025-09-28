@@ -10,9 +10,8 @@ import ChatPage from "./pages/ChatPage";
 export default function App() {
   const dispatch = useDispatch();
   const darkMode = useSelector((state) => state.theme.darkMode);
-  const wsUrl = 'wss://your-api-server.com/ws';
   // WebSocket lifecycle
-  useWebSocket(wsUrl);
+  useWebSocket();
   // Track network online/offline
   useNetworkStatus();
   // Manage message syncing

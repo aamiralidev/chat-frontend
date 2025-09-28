@@ -2,8 +2,8 @@ import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
   currentUser: {
-    id: 0,
-    username: 'Alice',  // just a username for now
+    id: 121,
+    username: 'aamir121',
   },
 };
 

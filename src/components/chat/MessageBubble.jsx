@@ -1,3 +1,6 @@
+import { formatMessageTime } from "@/utils/time";
+
+
 export default function MessageBubble({ message }) {
   const isOutgoing = message.type === "outgoing";
 
@@ -15,7 +18,7 @@ export default function MessageBubble({ message }) {
         className={`text-[10px] mt-1 self-end ${isOutgoing ? "text-blue-100" : "text-gray-500"
           }`}
       >
-        {message.timestamp}
+        {formatMessageTime(message.timestamp)}
       </span>
     </div>
   );

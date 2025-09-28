@@ -4,12 +4,13 @@ import MessageBubble from "./MessageBubble";
 // import { messages } from "../../mock/messages";
 import { loadMessagesFromDB } from '../../state/messagesSlice';
 
+const EMPTY_ARRAY = [];
 
 export default function MessagesList() {
   const containerRef = useRef(null);
-  const selectedChatId = useSelector((state) => state.chat.selectedChatId);
+  const selectedChatId = useSelector((state) => state.selectedChat.Current.id);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const messages = useSelector(state => state.messages.byChatId[selectedChatId] || []);
+  const messages = useSelector(state => state.messages.byChatId[selectedChatId] || EMPTY_ARRAY);
   const dispatch = useDispatch()
 
   const filteredMessages = messages;

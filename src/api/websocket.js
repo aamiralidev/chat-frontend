@@ -30,7 +30,7 @@ export const initWebSocket = () => {
 
     switch (data.type) {
       case 'MESSAGE_RECEIVED':
-        store.dispatch(addMessage({ chatId: data.message.chat_id, message: data.message }));
+        store.dispatch(addMessage({ chatId: data.message.convo_id, message: data.message }));
         // Save to IndexedDB
         db.messages.add(data.message);
         break;
@@ -38,7 +38,7 @@ export const initWebSocket = () => {
       case 'MESSAGE_ACK':
         // Server acknowledges message
         store.dispatch(updateMessageStatus({
-          chatId: data.chat_id,
+          chatId: data.convo_id,
           localId: data.local_id,
           serverId: data.server_id,
           status: 'sent'

@@ -19,7 +19,7 @@ export async function getAllConversations() {
   const conversationsWithLastMessage = await Promise.all(
     conversations.map(async (conversation) => {
       const lastMessage = await db.messages
-        .where("chat_id")
+        .where("convo_id")
         .equals(conversation.id)
         .reverse()        // Order by most recent
         .sortBy("timestamp"); // Make sure messages have a timestamp field like `created_at`

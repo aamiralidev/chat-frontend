@@ -21,8 +21,9 @@ export async function getPendingMessages() {
 
 // Fetch all messages for a specific chat, sorted by timestamp
 export async function getMessagesForChat(chatId) {
+  if (!chatId) return []
   return db.messages
-    .where("chat_id")
+    .where("convo_id")
     .equals(chatId)
     .sortBy("timestamp");
 }

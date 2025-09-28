@@ -7,7 +7,7 @@ import { sendMessage } from "../../state/messagesSlice";
 export default function MessageInput() {
   const dispatch = useDispatch();
   const [text, setText] = useState("");
-  const chatId = useSelector((state) => state.chat.selectedChatId);
+  const chatId = useSelector((state) => state.selectedChat.Current.id);
   const currentUser = useSelector((state) => state.auth.currentUser);
 
   const handleSend = async () => {
@@ -17,7 +17,7 @@ export default function MessageInput() {
     const message = {
       local_id: uuidv4(),
       server_id: null,
-      chat_id: chatId,
+      convo_id: chatId,
       sender_id: currentUser.id, // later replace with auth user ID
       content: text,
       timestamp: Date.now(),

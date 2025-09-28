@@ -9,7 +9,7 @@ import { updateLastMessage } from "./conversationsSlice";
  *   id?: number,           // optional DB primary key
  *   local_id: string,      // UUID generated client-side
  *   server_id?: string,    // assigned by server
- *   chat_id: string,
+ *   convo_id: string,
  *   sender_id: string,
  *   sender_username?: string,
  *   content: string,
@@ -78,7 +78,7 @@ export const syncWithServer = createAsyncThunk(
    Helper: upsert into state
    -------------------------*/
 function upsertMessageIntoState(state, message) {
-  const chatId = message.chat_id;
+  const chatId = message.convo_id;
   if (!chatId) return;
 
   if (!state.byChatId[chatId]) state.byChatId[chatId] = [];

@@ -14,8 +14,7 @@ export const fetchUpdatedConversations = async () => {
   console.log(`[SYNC] Fetching conversations since ${lastSyncTime}`);
 
   // Pass user_id to the API
-  const response = await fetchMissedConvosSince(lastSyncTime);
-  const conversations = response.data || [];
+  const conversations = await fetchMissedConvosSince(lastSyncTime);
 
   if (!Array.isArray(conversations) || conversations.length === 0) {
     console.log('[SYNC] No updated conversations from server.');

@@ -1,12 +1,19 @@
 // api/restClient.js
 import { ENDPOINTS } from "./endpoints";
+import store from "../state/store"; // <-- import your Redux store
 
+// Helper to fetch with auth header
 async function apiFetch(url, options = {}) {
+  const state = store.getState();
+  const username = state.auth.currentUser?.id; // <-- pull from authSlice
+
   const defaultHeaders = {
     "Content-Type": "application/json",
+    ...(username ? { Authorization: `${username}` } : {}), // add header if username exists
   };
+
   const response = await fetch(url, {
-    headers: defaultHeaders,
+    headers: { ...defaultHeaders, ...options.headers },
     ...options,
   });
 
@@ -20,17 +27,13 @@ async function apiFetch(url, options = {}) {
 // Fetch missed messages since last sync
 export async function fetchMissedMessagesSince(lastSync) {
   const url = `${ENDPOINTS.MESSAGES_SYNC}?since=${lastSync}`;
-  const data = await apiFetch(url);
-
-  return data.messages;
+  return apiFetch(url);
 }
 
-// Fetch missed messages since last sync
+// Fetch missed conversations since last sync
 export async function fetchMissedConvosSince(lastSync) {
   const url = `${ENDPOINTS.CONVO_SYNC}?since=${lastSync}`;
-  const data = await apiFetch(url);
-
-  return data.messages;
+  return apiFetch(url);
 }
 
 // Mark a message as delivered

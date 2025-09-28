@@ -1,11 +1,10 @@
-// src/state/chatSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { getAllConversations, saveConversation } from "@/data/conversationsDB";
 
 const initialState = {
-  chats: {
+  chats: [
     // chatId: { id, title, participants, lastMessage, unreadCount }
-  },
+  ],
   loading: false,
   error: null,
 };
@@ -14,7 +13,7 @@ export const loadCachedConversations = createAsyncThunk(
   "chats/loadCachedConversations",
   async () => {
     try {
-      const conversations = await getAllConversations(); // ✅ Missing 'await' before
+      const conversations = await getAllConversations(); 
       return conversations;
     } catch (error) {
       console.error("[ChatSlice] Failed to load cached conversations:", error);

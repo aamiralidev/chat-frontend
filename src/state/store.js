@@ -1,7 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 import sidebarReducer from "./sidebarSlice";
 import messagesReducer from "./messagesSlice";
-import chatReducer from "./conversationsSlice"
+import chatReducer from "./selectedChatSlice"
 import themeReducer from "./themeSlice";
 import conversationsReducer from './conversationsSlice';
 import connectionReducer from './connectionSlice';
@@ -16,7 +16,7 @@ export const store = configureStore({
     messages: messagesReducer,
     conversations: conversationsReducer,
     connection: connectionReducer,
-    chat: chatReducer,
+    selectedChat: chatReducer,
     theme: themeReducer,
   },
   middleware: (getDefaultMiddleware) =>
